@@ -118,27 +118,13 @@ void ReseauGTFS::ajouterArcsAttente(const DonneesGTFS & p_gtfs)
 void ReseauGTFS::ajouterArcsOrigineDestination(const DonneesGTFS &p_gtfs, const Coordonnees &p_pointOrigine,
                                                const Coordonnees &p_pointDestination)
 {
-    cout << "lets pray" << endl;
-    Heure fakeHeure(0,0,0);
-    cout << "Heure" << endl;
-    Arret arretOrigine;
-    try {
-        arretOrigine = Arret(this->stationIdOrigine, fakeHeure, fakeHeure, 0, 0);
-    }
-    catch(errc e){
-        cout << e << endl;
-    }
 
-    cout << "Arret" << endl;
-    Arret::Ptr arret_ptr_origine = make_shared<Arret> (arretOrigine);
-    cout << "Pointeur" << endl;
+    Arret::Ptr arret_ptr_origine = make_shared<Arret>(this->stationIdOrigine, Heure(), Heure(),0, "origine");
     m_arretDuSommet.push_back(arret_ptr_origine);
     m_sommetDeArret.insert({arret_ptr_origine, m_arretDuSommet.size() - 1});
     this->m_sommetOrigine = m_sommetDeArret.at(arret_ptr_origine);
-    cout << "Intensiation" << endl;
 
-    Arret arretDestination(this->stationIdDestination, fakeHeure, fakeHeure, 0, 0);
-    shared_ptr<Arret> arret_ptr_Destination = make_shared<Arret>(arretDestination);
+    shared_ptr<Arret> arret_ptr_Destination = make_shared<Arret>(this->stationIdDestination, Heure(), Heure(),0, "destination");
     m_arretDuSommet.push_back(arret_ptr_Destination);
     m_sommetDeArret.insert({arret_ptr_Destination, m_arretDuSommet.size() - 1});
     this->m_sommetDestination = m_sommetDeArret.at(arret_ptr_Destination);
