@@ -54,13 +54,13 @@ void ReseauGTFS::ajouterArcsTransferts(const DonneesGTFS & p_gtfs)
                 {
                     string ligneDestination = p_gtfs.getLignes().find(p_gtfs.getVoyages().find(arretDestinationPossible->second->getVoyageId())->second.getLigne())->second.getNumero();
 
-                    //la ligne de l'arrêt est différent de l'arrêt d'origine ou d'un arrêt déjà ajouter pour l'arrêt d'origine
                     if(ligneDejaUtilisee.find(ligneDestination) == ligneDejaUtilisee.end())
                     {
                         ligneDejaUtilisee.insert(ligneDestination);
                         this->m_leGraphe.ajouterArc(m_sommetDeArret.at(arretOrigine.second),
                                                         m_sommetDeArret.at(arretDestinationPossible->second),
                                                     arretDestinationPossible->first-arretOrigine.first);
+
                     }
                     arretDestinationPossible++;
                 }
@@ -86,13 +86,13 @@ void ReseauGTFS::ajouterArcsAttente(const DonneesGTFS & p_gtfs)
 
                     while (arretDestinationPossible != station.second.getArrets().end()) {
                         string ligneDestination = p_gtfs.getLignes().find(p_gtfs.getVoyages().find(arretDestinationPossible->second->getVoyageId())->second.getLigne())->second.getNumero();
-                        if(ligneDejaUtilisee.find(ligneDestination) == ligneDejaUtilisee.end()){
+                        if(ligneDejaUtilisee.find(ligneDestination) == ligneDejaUtilisee.end()) {
 
                             ligneDejaUtilisee.insert(ligneDestination);
                             this->m_leGraphe.ajouterArc(m_sommetDeArret.at(arretOrigine.second),
                                                         m_sommetDeArret.at(arretDestinationPossible->second),
-                                                        arretOrigine.second->getHeureArrivee() -
-                                                                arretDestinationPossible->first);
+                                                        arretDestinationPossible->first - arretOrigine.first
+                                                        );
                         }
                         arretDestinationPossible++;
                     }
@@ -129,52 +129,49 @@ void ReseauGTFS::ajouterArcsOrigineDestination(const DonneesGTFS &p_gtfs, const 
     m_sommetDeArret.insert({arret_ptr_Destination, m_arretDuSommet.size() - 1});
     this->m_sommetDestination = m_sommetDeArret.at(arret_ptr_Destination);
 
-    this->m_leGraphe.resize(this->m_leGraphe.getNbArcs() + 2);
+    this->m_leGraphe.resize(m_arretDuSommet.size());
 
-    cout << "it work" << endl;
+    for (auto &station : p_gtfs.getStations()) {
+        double distanceMarcheOrigineStation = p_pointOrigine - station.second.getCoords();
 
-    //DONE il faut ajouter les arcs qui sont avant la distance de marche max
-    //DONE il doivent être possible d'atteindre avant le temps de l'autobus
-    //DONE l'arc a comme poids le temps de marche plus le temps d'attente (autrement dit juste le temps d'attendre de ceux qui sont valides)
-    //DONE l'arc a comme poids le temps de marche plus le temps d'attente (autrement dit juste le temps d'attendre de ceux qui sont valides)
-    //TODO la lower_bound est mal setter on va avoir tout les arrêts
+        if (distanceMarcheOrigineStation <= this->distanceMaxMarche)
+        {
+            set<string> ligneDejaUtilisee = {};
+            auto arretDestinationPossible = station.second.getArrets().lower_bound(p_gtfs.getTempsDebut().add_secondes(distanceMarcheOrigineStation / this->vitesseDeMarche*3600));
+
+            while (arretDestinationPossible != station.second.getArrets().end()) {
+                string ligneDestination = p_gtfs.getLignes().find(p_gtfs.getVoyages().find(arretDestinationPossible->second->getVoyageId())->second.getLigne())->second.getNumero();
+                if(ligneDejaUtilisee.find(ligneDestination) == ligneDejaUtilisee.end()){
+
+                    ligneDejaUtilisee.insert(ligneDestination);
+                    this->m_leGraphe.ajouterArc(this->m_sommetOrigine,
+                                                m_sommetDeArret.at(arretDestinationPossible->second),
+                                                arretDestinationPossible->first - p_gtfs.getTempsDebut());
 
 
-    for (auto &station:p_gtfs.getStations()){
-        set<string> ligneDejaUtilisee = {};
-        double distanceMarcheStation = sqrt(pow(station.second.getCoords().getLatitude()-p_pointOrigine.getLatitude(),2)+pow(station.second.getCoords().getLongitude()-p_pointOrigine.getLongitude(),2));
-        if ( distanceMarcheStation <= this->distanceMaxMarche){
-            auto arret = station.second.getArrets().lower_bound(Heure(0,0,ceil(distanceMarcheStation * this->vitesseDeMarche)));
-            while (arret != station.second.getArrets().end()){
-                if(ligneDejaUtilisee.find(p_gtfs.getVoyages().find(arret->second->getVoyageId())->second.getLigne())!=ligneDejaUtilisee.end()){
-                    ligneDejaUtilisee.insert(p_gtfs.getVoyages().find(arret->second->getVoyageId())->second.getLigne());
-                    try {
-                        this->m_leGraphe.getPoids(m_sommetOrigine, m_sommetDeArret.at(arret->second));
-                    }
-                    catch (logic_error){
-                        this->m_leGraphe.ajouterArc(m_sommetOrigine,
-                                                    m_sommetDeArret.at(arret->second),
-                                                    ceil(distanceMarcheStation * this->vitesseDeMarche));
-                    }
+                    this->m_nbArcsOrigineVersStations++;
                 }
-                arret++;
+                arretDestinationPossible++;
+            }
+        }
+
+
+        double distanceMarcheStationDestination =  p_pointDestination - station.second.getCoords();
+
+        if (distanceMarcheStationDestination <= this->distanceMaxMarche)
+        {
+            for (auto arretOriginePossible : station.second.getArrets()) {
+                this->m_leGraphe.ajouterArc(m_sommetDeArret.at(arretOriginePossible.second),
+                                            this->m_sommetDestination,
+                                            distanceMarcheStationDestination / this->vitesseDeMarche*3600);
+
+                this->m_sommetsVersDestination.push_back(m_sommetDeArret.at(arretOriginePossible.second));
+                this->m_nbArcsStationsVersDestination++;
             }
         }
     }
 
-    for (auto &station:p_gtfs.getStations()){
-        double distanceMarcheStation = sqrt(pow(station.second.getCoords().getLatitude()-p_pointDestination.getLatitude(),2)+pow(station.second.getCoords().getLongitude()-p_pointDestination.getLongitude(),2));
-        if ( distanceMarcheStation <= this->distanceMaxMarche){
-            auto arret = station.second.getArrets().lower_bound(Heure(0,0,ceil(distanceMarcheStation * this->vitesseDeMarche)));
-            while (arret != station.second.getArrets().end()){
-                this->m_leGraphe.ajouterArc(m_sommetDeArret.at(arret->second),
-                                            m_sommetDestination,
-                                            ceil(distanceMarcheStation * this->vitesseDeMarche));
-                arret++;
-            }
-        }
-    }
-    m_origine_dest_ajoute = true;
+    this->m_origine_dest_ajoute = true;
 }
 
 //! \brief Remet ReseauGTFS dans l'était qu'il était avant l'exécution de ReseauGTFS::ajouterArcsOrigineDestination()
@@ -186,28 +183,26 @@ void ReseauGTFS::ajouterArcsOrigineDestination(const DonneesGTFS &p_gtfs, const 
 void ReseauGTFS::enleverArcsOrigineDestination()
 {
     try {
-    for(auto sommet : m_sommetsVersDestination){
-        for (auto sommet2 : m_sommetsVersDestination) {
-            try{
-                m_leGraphe.enleverArc(sommet2, sommet);
-            }
-            catch (logic_error){}
-
-            try{
-                m_leGraphe.enleverArc(sommet, sommet2);
-            }
-            catch (logic_error){}
+        for(size_t arret : m_sommetsVersDestination) {
+            m_leGraphe.enleverArc(arret, this->m_sommetDestination);
         }
-    }
 
-    this->m_leGraphe.resize(m_sommetsVersDestination.size()-2);
-    m_sommetDeArret.clear();
-    m_arretDuSommet.clear();
-    m_nbArcsStationsVersDestination = 0;
-    m_nbArcsOrigineVersStations = 0;
+        m_sommetDeArret.erase(m_arretDuSommet.at(this->m_sommetOrigine));
+        m_sommetDeArret.erase(m_arretDuSommet.at(this->m_sommetDestination));
+
+        m_sommetsVersDestination.clear();
+
+        m_arretDuSommet.pop_back();
+        m_arretDuSommet.pop_back();
+
+        this->m_leGraphe.resize(m_arretDuSommet.size());
+
+        m_nbArcsStationsVersDestination = 0;
+        m_nbArcsOrigineVersStations = 0;
+        this->m_origine_dest_ajoute = false;
     }
-    catch (...){
-        throw logic_error("EnleverArcsOrigineDestination");
+    catch (logic_error e){
+        throw logic_error("Enelver arc origine destination");
     }
 }
 
